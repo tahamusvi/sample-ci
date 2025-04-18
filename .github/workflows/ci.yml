@@ -1,0 +1,66 @@
+name: Django CI
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      DEBUG: True
+      deploy: True
+      SECRET_KEY: dfljhvuiwehvw8r297593hnsndvlk893455
+      RABBIT_URI: ${{secrets.RABBIT_URI}}
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/test_db
+
+
+
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          while ! pg_isready -h localhost -p 5432 -U postgres; do
+            sleep 1
+          done
+          echo "PostgreSQL is ready!"
+
+      - name: Apply Fixtures
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_db
+        run: |
+          python manage.py load_all_fixtures --noinput
+
+      - name: Run tests
+        run: |
+          pytest --cov=services --cov-report=xml
+          
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v2
+        with:
+          file: coverage.xml
