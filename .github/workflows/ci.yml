@@ -58,7 +58,7 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest --cov=services --cov-report=xml
+          pytest --cov=.
           
       - name: Upload coverage report
         uses: codecov/codecov-action@v2
